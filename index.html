@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS: Life & Empire Simulator</title>
+    <style>
+        :root {
+            --bg-dark: #0a0c10;
+            --panel-bg: #12161f;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-gold: #f59e0b;
+            --accent-red: #ef4444;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #1f2937;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+        /* Top Bar */
+        header {
+            background: rgba(18, 22, 31, 0.95);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .brand { font-size: 1.4rem; font-weight: 800; tracking: 1px; color: var(--accent-gold); display: flex; align-items: center; gap: 8px; }
+        .stats-bar { display: flex; gap: 20px; align-items: center; }
+        .stat-badge { background: #1a202c; padding: 6px 14px; border-radius: 8px; border: 1px solid #2d3748; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; }
+        .stat-badge span { color: var(--accent-gold); }
+
+        /* App Layout */
+        .app-container { display: flex; flex: 1; overflow: hidden; }
+
+        /* Sidebar Navigation */
+        nav { width: 220px; background: var(--panel-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 15px 10px; gap: 8px; }
+        .nav-btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 12px 16px; border-radius: 8px; text-align: left; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+        .nav-btn:hover { background: #1a2233; color: var(--text-main); }
+        .nav-btn.active { background: #1e293b; color: var(--accent-blue); border-color: #334155; }
+
+        /* Main Content Area */
+        main { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .tab-content { display: none; flex-direction: column; gap: 20px; height: 100%; }
+        .tab-content.active { display: flex; }
+
+        /* Dashboard & Grid Layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+        .card { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .card-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Interactive Minigame Canvas Container */
+        .minigame-box { position: relative; width: 100%; height: 320px; background: #05070a; border-radius: 8px; border: 1px solid #1e293b; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        canvas { width: 100%; height: 100%; }
+
+        /* Buttons & Actions */
+        .btn { background: var(--accent-blue); color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: filter 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn:hover { filter: brightness(1.15); }
+        .btn:active { transform: translateY(1px); }
+        .btn-green { background: var(--accent-green); }
+        .btn-gold { background: var(--accent-gold); color: #000; }
+        .btn-purple { background: var(--accent-purple); }
+        .btn-red { background: var(--accent-red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Status Bars */
+        .progress-outer { width: 100%; background: #1a202c; height: 10px; border-radius: 5px; overflow: hidden; }
+        .progress-inner { height: 100%; background: var(--accent-green); width: 100%; transition: width 0.3s ease; }
+
+        /* Inventory & Shop Lists */
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #18202c; border-radius: 8px; border: 1px solid #232d3f; }
+        .item-info { display: flex; flex-direction: column; gap: 4px; }
+        .item-name { font-weight: 700; font-size: 0.95rem; }
+        .item-desc { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* Console / Event Log */
+        .console-log { background: #05070a; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; height: 140px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; display: flex; flex-direction: column; gap: 6px; }
+        .log-entry { color: #a0aec0; }
+        .log-entry.success { color: var(--accent-green); }
+        .log-entry.warning { color: var(--accent-gold); }
+        .log-entry.danger { color: var(--accent-red); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">⚡ NEXUS SIMULATOR</div>
+        <div class="stats-bar">
+            <div class="stat-badge">💰 Cash: <span id="stat-cash">$500</span></div>
+            <div class="stat-badge">⚡ Energy: <span id="stat-energy">100/100</span></div>
+            <div class="stat-badge">🏆 Rep: <span id="stat-rep">0</span></div>
+            <div class="stat-badge">📅 Day: <span id="stat-day">1</span></div>
+            <button class="btn btn-gold" onclick="game.nextDay()">End Day (Rest)</button>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <nav>
+            <button class="nav-btn active" onclick="game.showTab('overview')">📊 Overview</button>
+            <button class="nav-btn" onclick="game.showTab('fishing')">🎣 Deep Sea Fishing</button>
+            <button class="nav-btn" onclick="game.showTab('culinary')">🔥 Culinary Hearth</button>
+            <button class="nav-btn" onclick="game.showTab('hacking')">💻 Cyber Syndicate</button>
+            <button class="nav-btn" onclick="game.showTab('market')">🏛️ Property & Gear</button>
+        </nav>
+
+        <main>
+            <!-- OVERVIEW TAB -->
+            <div id="tab-overview" class="tab-content active">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title">Vitals & Status</div>
+                        <div>
+                            <label>Energy Level</label>
+                            <div class="progress-outer"><div id="bar-energy" class="progress-inner" style="width: 100%;"></div></div>
+                        </div>
+                        <div>
+                            <label>Mastery Level</label>
+                            <div class="progress-outer"><div id="bar-xp" class="progress-inner" style="width: 0%; background: var(--accent-blue);"></div></div>
+                        </div>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-green" onclick="game.workOddJob()">Do Odd Jobs (+$50, -15 Energy)</button>
+                            <button class="btn btn-purple" onclick="game.saveState()">Save Game</button>
+                            <button class="btn btn-red" onclick="game.resetState()">Reset</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Assets Owned</div>
+                        <div id="owned-assets-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <div class="item-desc">No high-tier assets acquired yet. Visit the Property & Gear Market.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Activity Feed & Logs</div>
+                    <div id="console-feed" class="console-log">
+                        <div class="log-entry success">> Welcome to NEXUS Life Simulator. Choose an active career route to start building your empire.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FISHING TAB -->
+            <div id="tab-fishing" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title">Offshore Deep Sea Fishing</div>
+                        <p class="item-desc">Hold & release <strong>LEFT CLICK</strong> inside the box to keep the tension bar inside the green capture zone until caught!</p>
+                        <div class="minigame-box">
+                            <canvas id="canvas-fishing"></canvas>
+                        </div>
+                        <button id="btn-start-fish" class="btn btn-green" onclick="fishingGame.start()">Cast Line (-20 Energy)</button>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Fish Vault & Market</div>
+                        <div id="fish-inventory" style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
+                            <div class="item-desc">Your fish live-well is currently empty.</div>
+                        </div>
+                        <button class="btn btn-gold" onclick="fishingGame.sellAll()">Sell All Catch</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CULINARY TAB -->
+            <div id="tab-culinary" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title">Stone Hearth Sear Station</div>
+                        <p class="item-desc">Click <strong>SEAR PROTEIN</strong> to start heating. Click again when the indicator stops inside the <strong>GOLD CRUST ZONE</strong>!</p>
+                        <div class="minigame-box">
+                            <canvas id="canvas-culinary"></canvas>
+                        </div>
+                        <button id="btn-sear-cook" class="btn btn-purple" onclick="culinaryGame.triggerAction()">Start Sear (-15 Energy)</button>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Culinary Upgrades</div>
+                        <div id="culinary-upgrades" style="display: flex; flex-direction: column; gap: 10px;">
+                            <div class="item-row">
+                                <div class="item-info">
+                                    <div class="item-name">Binchotan Hearth Rig</div>
+                                    <div class="item-desc">+50% payout per successful sear</div>
+                                </div>
+                                <button class="btn btn-gold" onclick="game.buyUpgrade('binchotan', 800)">$800</button>
+                            </div>
+                            <div class="item-row">
+                                <div class="item-info">
+                                    <div class="item-name">Laser Micro-Searing Array</div>
+                                    <div class="item-desc">+150% payout per perfect sear</div>
+                                </div>
+                                <button class="btn btn-gold" onclick="game.buyUpgrade('laser_sear', 4500)">$4,500</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HACKING TAB -->
+            <div id="tab-hacking" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title">Cyber Network Node Decryption</div>
+                        <p class="item-desc">Click the highlighted active node buttons in exact sequence before time runs out!</p>
+                        <div class="minigame-box" style="flex-direction: column; gap: 15px;">
+                            <div id="hacking-prompt" style="font-size: 1.5rem; font-weight: 800; tracking: 4px; color: var(--accent-green);">[PRESS START]</div>
+                            <div id="hacking-timer" style="color: var(--accent-gold); font-weight: 700;">Time Left: --</div>
+                            <div id="hacking-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 80%; max-width: 300px;">
+                                <!-- Nodes dynamically generated -->
+                            </div>
+                        </div>
+                        <button id="btn-start-hack" class="btn btn-green" onclick="hackingGame.start()">Infiltrate Node (-25 Energy)</button>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Syndicate Data Operations</div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div class="item-row">
+                                <div class="item-info">
+                                    <div class="item-name">Automated Mining Bot</div>
+                                    <div class="item-desc">Generates +$25 every day automatically</div>
+                                </div>
+                                <button class="btn btn-gold" onclick="game.buyUpgrade('crypto_bot', 1200)">$1,200</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MARKET TAB -->
+            <div id="tab-market" class="tab-content">
+                <div class="card">
+                    <div class="card-title">Property, Vehicles & Gear Vault</div>
+                    <div class="grid-3" style="margin-top: 10px;">
+                        <div class="item-row" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                            <div class="item-name">Deep-Sea Offshore Trawler</div>
+                            <div class="item-desc">Unlocks giant marlin and ocean tunas in fishing.</div>
+                            <button class="btn btn-gold" onclick="game.buyAsset('trawler', 5000)">Buy for $5,000</button>
+                        </div>
+                        <div class="item-row" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                            <div class="item-name">Commercial Kitchen Pavilion</div>
+                            <div class="item-desc">Allows hosting VIP seating events.</div>
+                            <button class="btn btn-gold" onclick="game.buyAsset('pavilion', 15000)">Buy for $15,000</button>
+                        </div>
+                        <div class="item-row" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                            <div class="item-name">Englewood Cliffs Estate</div>
+                            <div class="item-desc">Max Energy increased to 150. Rest restores full energy.</div>
+                            <button class="btn btn-gold" onclick="game.buyAsset('estate', 50000)">Buy for $50,000</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- SYNTHESIZED WEB AUDIO ENGINE ---
+        class AudioEngine {
+            constructor() { this.ctx = null; }
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+            playTone(freq, type, duration, gainVal = 0.1) {
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+            cash() { this.playTone(880, 'sine', 0.15); setTimeout(() => this.playTone(1760, 'sine', 0.2), 80); }
+            success() { this.playTone(523, 'triangle', 0.1); setTimeout(() => this.playTone(659, 'triangle', 0.15), 100); }
+            fail() { this.playTone(180, 'sawtooth', 0.3); }
+        }
+        const sfx = new AudioEngine();
+
+        // --- CORE GAME ENGINE ---
+        class GameEngine {
+            constructor() {
+                this.state = {
+                    cash: 500,
+                    energy: 100,
+                    maxEnergy: 100,
+                    rep: 0,
+                    day: 1,
+                    xp: 0,
+                    inventory: [],
+                    upgrades: {},
+                    assets: {}
+                };
+            }
+
+            init() {
+                this.loadState();
+                this.updateUI();
+            }
+
+            log(msg, type = '') {
+                const feed = document.getElementById('console-feed');
+                const div = document.createElement('div');
+                div.className = `log-entry ${type}`;
+                div.innerText = `> ${msg}`;
+                feed.appendChild(div);
+                feed.scrollTop = feed.scrollHeight;
+            }
+
+            updateUI() {
+                document.getElementById('stat-cash').innerText = `$${this.state.cash.toLocaleString()}`;
+                document.getElementById('stat-energy').innerText = `${this.state.energy}/${this.state.maxEnergy}`;
+                document.getElementById('stat-rep').innerText = this.state.rep;
+                document.getElementById('stat-day').innerText = this.state.day;
+                document.getElementById('bar-energy').style.width = `${(this.state.energy / this.state.maxEnergy) * 100}%`;
+                document.getElementById('bar-xp').style.width = `${this.state.xp % 100}%`;
+
+                // Update Assets List
+                const assetList = document.getElementById('owned-assets-list');
+                const keys = Object.keys(this.state.assets);
+                if (keys.length > 0) {
+                    assetList.innerHTML = keys.map(k => `<div class="item-row"><span class="item-name">${k.toUpperCase()}</span><span class="item-desc">Active</span></div>`).join('');
+                }
+            }
+
+            consumeEnergy(amount) {
+                if (this.state.energy >= amount) {
+                    this.state.energy -= amount;
+                    this.updateUI();
+                    return true;
+                }
+                this.log('Not enough energy! Rest to end the day.', 'danger');
+                sfx.fail();
+                return false;
+            }
+
+            addCash(amount) {
+                this.state.cash += amount;
+                this.state.xp += Math.floor(amount / 10);
+                sfx.cash();
+                this.updateUI();
+            }
+
+            workOddJob() {
+                if (this.consumeEnergy(15)) {
+                    this.addCash(50);
+                    this.log('Completed local freelancing job. Earned +$50.', 'success');
+                }
+            }
+
+            nextDay() {
+                this.state.day++;
+                this.state.energy = this.state.maxEnergy;
+                if (this.state.upgrades.crypto_bot) {
+                    this.addCash(25);
+                    this.log('Automated bot mined +$25 overnight.', 'warning');
+                }
+                this.log(`Advanced to Day ${this.state.day}. Energy completely restored!`, 'success');
+                this.updateUI();
+                this.saveState();
+            }
+
+            showTab(tabId) {
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+                document.getElementById(`tab-${tabId}`).classList.add('active');
+                event.target.classList.add('active');
+            }
+
+            buyUpgrade(key, cost) {
+                if (this.state.cash >= cost && !this.state.upgrades[key]) {
+                    this.state.cash -= cost;
+                    this.state.upgrades[key] = true;
+                    this.log(`Purchased upgrade: ${key.replace('_', ' ').toUpperCase()}!`, 'success');
+                    this.updateUI();
+                } else {
+                    this.log('Cannot purchase upgrade.', 'danger');
+                }
+            }
+
+            buyAsset(key, cost) {
+                if (this.state.cash >= cost && !this.state.assets[key]) {
+                    this.state.cash -= cost;
+                    this.state.assets[key] = true;
+                    if (key === 'estate') this.state.maxEnergy = 150;
+                    this.log(`Acquired Asset: ${key.toUpperCase()}!`, 'success');
+                    this.updateUI();
+                } else {
+                    this.log('Purchase failed.', 'danger');
+                }
+            }
+
+            saveState() {
+                localStorage.setItem('nexus_save', JSON.stringify(this.state));
+                this.log('Progress saved successfully to LocalStorage.', 'warning');
+            }
+
+            loadState() {
+                const data = localStorage.getItem('nexus_save');
+                if (data) {
+                    this.state = JSON.parse(data);
+                    this.log('Saved data restored.', 'success');
+                }
+            }
+
+            resetState() {
+                localStorage.removeItem('nexus_save');
+                location.reload();
+            }
+        }
+        const game = new GameEngine();
+
+        // --- FISHING MINIGAME ENGINE ---
+        class FishingGame {
+            constructor() {
+                this.canvas = document.getElementById('canvas-fishing');
+                this.ctx = this.canvas.getContext('2d');
+                this.active = false;
+                this.fishPos = 50;
+                this.targetPos = 50;
+                this.barPos = 40;
+                this.progress = 0;
+                this.isMouseDown = false;
+
+                this.canvas.addEventListener('mousedown', () => this.isMouseDown = true);
+                this.canvas.addEventListener('mouseup', () => this.isMouseDown = false);
+            }
+
+            start() {
+                if (!game.consumeEnergy(20)) return;
+                this.active = true;
+                this.progress = 30;
+                this.fishPos = 50;
+                this.barPos = 40;
+                document.getElementById('btn-start-fish').disabled = true;
+                this.loop();
+            }
+
+            loop() {
+                if (!this.active) return;
+
+                // Canvas Dimensions
+                this.canvas.width = this.canvas.parentElement.clientWidth;
+                this.canvas.height = this.canvas.parentElement.clientHeight;
+                const h = this.canvas.height;
+                const w = this.canvas.width;
+
+                // Physics
+                if (this.isMouseDown) this.barPos -= 2.5;
+                else this.barPos += 2.0;
+
+                this.barPos = Math.max(10, Math.min(80, this.barPos));
+
+                // AI Fish movement
+                if (Math.random() < 0.05) this.targetPos = Math.random() * 70 + 15;
+                this.fishPos += (this.targetPos - this.fishPos) * 0.05;
+
+                // Check capture
+                if (Math.abs(this.fishPos - (this.barPos + 10)) < 12) {
+                    this.progress += 0.4;
+                } else {
+                    this.progress -= 0.3;
+                }
+
+                // Render
+                this.ctx.clearRect(0, 0, w, h);
+                
+                // Track
+                this.ctx.fillStyle = '#111827';
+                this.ctx.fillRect(w/2 - 25, 20, 50, h - 40);
+
+                // Target Bar
+                this.ctx.fillStyle = '#10b981';
+                this.ctx.fillRect(w/2 - 20, (this.barPos / 100) * (h - 40), 40, 50);
+
+                // Fish Icon
+                this.ctx.fillStyle = '#f59e0b';
+                this.ctx.beginPath();
+                this.ctx.arc(w/2, (this.fishPos / 100) * (h - 40), 10, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Progress Bar
+                this.ctx.fillStyle = '#3b82f6';
+                this.ctx.fillRect(10, h - 20, (this.progress / 100) * (w - 20), 10);
+
+                if (this.progress >= 100) {
+                    this.active = false;
+                    document.getElementById('btn-start-fish').disabled = false;
+                    const reward = game.state.assets.trawler ? 450 : 120;
+                    game.addCash(reward);
+                    game.log(`Caught a prime ocean fish! Earned +$${reward}.`, 'success');
+                    sfx.success();
+                } else if (this.progress <= 0) {
+                    this.active = false;
+                    document.getElementById('btn-start-fish').disabled = false;
+                    game.log('The fish snapped the line and escaped!', 'danger');
+                    sfx.fail();
+                } else {
+                    requestAnimationFrame(() => this.loop());
+                }
+            }
+
+            sellAll() {
+                game.log('Fish market inventory cleared.', 'warning');
+            }
+        }
+        const fishingGame = new FishingGame();
+
+        // --- CULINARY MINIGAME ENGINE ---
+        class CulinaryGame {
+            constructor() {
+                this.canvas = document.getElementById('canvas-culinary');
+                this.ctx = this.canvas.getContext('2d');
+                this.active = false;
+                this.pos = 0;
+                this.dir = 2;
+            }
+
+            triggerAction() {
+                if (!this.active) {
+                    if (!game.consumeEnergy(15)) return;
+                    this.active = true;
+                    this.pos = 0;
+                    document.getElementById('btn-sear-cook').innerText = 'STOP SEAR!';
+                    this.loop();
+                } else {
+                    this.active = false;
+                    document.getElementById('btn-sear-cook').innerText = 'Start Sear (-15 Energy)';
+                    this.evaluate();
+                }
+            }
+
+            loop() {
+                if (!this.active) return;
+                this.canvas.width = this.canvas.parentElement.clientWidth;
+                this.canvas.height = this.canvas.parentElement.clientHeight;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+
+                this.pos += this.dir;
+                if (this.pos >= w || this.pos <= 0) this.dir *= -1;
+
+                this.ctx.clearRect(0, 0, w, h);
+
+                // Background track
+                this.ctx.fillStyle = '#1e293b';
+                this.ctx.fillRect(20, h/2 - 15, w - 40, 30);
+
+                // Gold Sweet Spot Zone
+                this.ctx.fillStyle = '#f59e0b';
+                this.ctx.fillRect(w/2 - 30, h/2 - 15, 60, 30);
+
+                // Indicator Needle
+                this.ctx.fillStyle = '#ef4444';
+                this.ctx.fillRect(this.pos, h/2 - 25, 6, 50);
+
+                requestAnimationFrame(() => this.loop());
+            }
+
+            evaluate() {
+                const w = this.canvas.width;
+                const sweetSpotMin = w/2 - 30;
+                const sweetSpotMax = w/2 + 30;
+
+                if (this.pos >= sweetSpotMin && this.pos <= sweetSpotMax) {
+                    let payout = 150;
+                    if (game.state.upgrades.binchotan) payout *= 1.5;
+                    if (game.state.upgrades.laser_sear) payout *= 2.5;
+                    game.addCash(Math.floor(payout));
+                    game.log(`PERFECT SEAR! Earned +$${Math.floor(payout)} from the dish pass.`, 'success');
+                    sfx.success();
+                } else {
+                    game.log('Overcooked! Protein charred. Low payout +$20.', 'danger');
+                    game.addCash(20);
+                    sfx.fail();
+                }
+            }
+        }
+        const culinaryGame = new CulinaryGame();
+
+        // --- HACKING MINIGAME ENGINE ---
+        class HackingGame {
+            constructor() {
+                this.sequence = [];
+                this.playerSeq = [];
+                this.timer = null;
+                this.timeLeft = 0;
+            }
+
+            start() {
+                if (!game.consumeEnergy(25)) return;
+                this.sequence = Array.from({length: 4}, () => Math.floor(Math.random() * 9));
+                this.playerSeq = [];
+                this.timeLeft = 6;
+                
+                document.getElementById('hacking-prompt').innerText = `NODE SEQ: ${this.sequence.join('-')}`;
+                document.getElementById('hacking-timer').innerText = `Time Left: ${this.timeLeft}s`;
+
+                this.renderGrid();
+                
+                clearInterval(this.timer);
+                this.timer = setInterval(() => {
+                    this.timeLeft--;
+                    document.getElementById('hacking-timer').innerText = `Time Left: ${this.timeLeft}s`;
+                    if (this.timeLeft <= 0) {
+                        clearInterval(this.timer);
+                        game.log('Decryption failed! Node lock activated.', 'danger');
+                        sfx.fail();
+                    }
+                }, 1000);
+            }
+
+            renderGrid() {
+                const grid = document.getElementById('hacking-grid');
+                grid.innerHTML = '';
+                for (let i = 0; i < 9; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-purple';
+                    btn.innerText = i + 1;
+                    btn.onclick = () => this.pressNode(i);
+                    grid.appendChild(btn);
+                }
+            }
+
+            pressNode(num) {
+                this.playerSeq.push(num);
+                sfx.playTone(400 + num * 50, 'sine', 0.05);
+
+                const currentIndex = this.playerSeq.length - 1;
+                if (this.playerSeq[currentIndex] !== this.sequence[currentIndex]) {
+                    clearInterval(this.timer);
+                    game.log('Access Denied! Incorrect node sequence.', 'danger');
+                    sfx.fail();
+                    return;
+                }
+
+                if (this.playerSeq.length === this.sequence.length) {
+                    clearInterval(this.timer);
+                    const reward = 350;
+                    game.addCash(reward);
+                    game.log(`NODE DECRYPTED! Data stolen. +$${reward} transferred.`, 'success');
+                    sfx.success();
+                    document.getElementById('hacking-prompt').innerText = '[NODE CLEARED]';
+                }
+            }
+        }
+        const hackingGame = new HackingGame();
+
+        // Boot Application
+        window.onload = () => game.init();
+    </script>
+</body>
+</html>
